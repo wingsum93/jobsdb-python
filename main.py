@@ -30,60 +30,37 @@ driver = setup_driver(headless=False)
 # 等待頁面載入
 driver.get("https://hk.jobsdb.com/android-jobs?page=1")
 driver.implicitly_wait(4)
-left_job_post_css = 'div._1oozmqe0.l218ib4v.l218ib51 a[data-automation="job-list-item-link-overlay"]'
-job_title_css = 'h1[data-automation="job-detail-title"]'
-job_company_name_css = 'span[data-automation="advertiser-name"]'
-job_location_css = 'span[data-automation="job-detail-location"]'
-job_work_type_css = 'span[data-automation="job-detail-work-type"]'
-job_detail_salary_css = 'span[data-automation="job-detail-salary"]'
-job_expected_salary_css = 'span[data-automation="job-detail-add-expected-salary"]'
-job_post_date_css = 'span._1oozmqe0.l218ib4z._1ljn1h70._1ljn1h71._1ljn1h71u._1ljn1h76._1kdtdvw4'
-job_description_css = 'div[data-automation="jobAdDetails"'
+job_selector = 'div._1oozmqe0.l218ib4v.l218ib51 a[data-automation="job-list-item-link-overlay"]'
+job_title_selector = 'h1[data-automation="job-detail-title"]'
+job_company_name_selector = 'span[data-automation="advertiser-name"]'
+job_location_selector = 'span[data-automation="job-detail-location"]'
+job_work_type_selector = 'span[data-automation="job-detail-work-type"]'
+job_detail_salary_selector = 'span[data-automation="job-detail-salary"]'
+job_expected_salary_selector = 'span[data-automation="job-detail-add-expected-salary"]'
+job_post_date_selector = 'span._1oozmqe0.l218ib4z._1ljn1h70._1ljn1h71._1ljn1h71u._1ljn1h76._1kdtdvw4'
+job_description_selector = 'div[data-automation="jobAdDetails"'
 
 
 def get_job_salary(driver):
     try:
-        job_detail_salary = driver.find_element(By.CSS_SELECTOR,job_detail_salary_css)
+        job_detail_salary = driver.find_element(By.CSS_SELECTOR,job_detail_salary_selector)
         return job_detail_salary.text
     except Exception as e:
-        job_expected_salary = driver.find_element(By.CSS_SELECTOR,job_expected_salary_css)
+        job_expected_salary = driver.find_element(By.CSS_SELECTOR,job_expected_salary_selector)
         return job_expected_salary.text
-    
-# 找出所有目標元素（同一 class 的 list）
-elements = driver.find_elements(By.CSS_SELECTOR, left_job_post_css)
-print(f"Found {len(elements)} elements.")
-noOfSuccess = 0
-session = get_session()
-for idx, element in enumerate(elements):
+def extract_job(driver):
     try:
-        # 使用 ActionChains 滾動並點擊元素
-        actions = ActionChains(driver)
-        actions.move_to_element(element).click().perform()
-        # 等待滾動或點擊後變化
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, job_title_css))
-        )
-        # 取得頁面內容
-        
-        job_title = driver.find_element(By.CSS_SELECTOR,job_title_css).text
-        company_name = driver.find_element(By.CSS_SELECTOR,job_company_name_css).text
-        job_des = driver.find_element(By.CSS_SELECTOR,job_description_css).text
-        job_loc = driver.find_element(By.CSS_SELECTOR,job_location_css).text
-        job_type = driver.find_element(By.CSS_SELECTOR,job_work_type_css).text
-        job_post_date = driver.find_element(By.CSS_SELECTOR,job_post_date_css).text
+        job_title = driver.find_element(By.CSS_SELECTOR, job_title_selector).text
+        company_name = driver.find_element(By.CSS_SELECTOR, job_company_name_selector).text
+        job_loc = driver.find_element(By.CSS_SELECTOR, job_location_selector).text
+        job_type = driver.find_element(By.CSS_SELECTOR, job_work_type_selector).text
+        job_post_date = driver.find_element(By.CSS_SELECTOR, job_post_date_selector).text
         job_salary_text = get_job_salary(driver)
+        job_des = driver.find_element(By.CSS_SELECTOR, job_description_selector).text
         url = driver.current_url
-        parsed_url = urlparse(url)
-        query_params = parse_qs(parsed_url.query)
-        job_id_str = query_params.get("jobId", [None])[0]
-        # 轉為 int，如果 jobId 存在
-        if job_id_str is not None and job_id_str.isdigit():
-            job_id = int(job_id_str)
-        else:
-            job_id = -1  # 或你可以設為 -1 代表無效
-        
-        # 儲存到資料庫
-        job_ad = JobAd(
+        job_id = int(parse_qs(urlparse(url).query).get("jobId", [-1])[0])
+
+        return JobAd(
             jobadid=job_id,
             job_title=job_title,
             company_name=company_name,
@@ -93,13 +70,30 @@ for idx, element in enumerate(elements):
             job_salary_text=job_salary_text,
             job_description=job_des
         )
-        
-        session.add(job_ad)
-        noOfSuccess += 1
-        print(f"[{idx+1}] Click success, noOfSuccess = {noOfSuccess}")
-        print(f"[{idx+1}] {job_title} | {company_name} | {job_loc} | {job_type} | {job_post_date} | {job_salary_text} | {job_des[:80]}...")
+    except Exception as e:
+        print(f"❌ Failed to extract job: {e}")
+        return None
+# 找出所有目標元素（同一 class 的 list）
+elements = driver.find_elements(By.CSS_SELECTOR, job_selector)
+print(f"Found {len(elements)} elements.")
+noOfSuccess = 0
+job_ads = []
+session = get_session()
+for idx, element in enumerate(elements):
+    try:
+        # 使用 ActionChains 滾動並點擊元素
+        actions = ActionChains(driver)
+        actions.move_to_element(element).click().perform()
+        # 等待滾動或點擊後變化
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, job_title_selector))
+        )
+        job_ad = extract_job(driver)
+        job_ads.append(job_ad)
     except Exception as e:
         print(f"[{idx+1}] Click failed: {e}")
+        
+session.add_all(job_ads)  # 將所有 JobAd 實例添加到 session
 session.commit()  # 提交所有變更
 session.close()  # 關閉 session
 driver.quit()  # 關閉瀏覽器
