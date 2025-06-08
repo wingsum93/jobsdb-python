@@ -30,7 +30,7 @@ driver = setup_driver(headless=False)
 # 等待頁面載入
 driver.get("https://hk.jobsdb.com/android-jobs?page=1")
 driver.implicitly_wait(4)
-left_job_post_css = 'div._1oozmqe0.l218ib4v.l218ib51'
+left_job_post_css = 'div._1oozmqe0.l218ib4v.l218ib51 a[data-automation="job-list-item-link-overlay"]'
 job_title_css = 'h1[data-automation="job-detail-title"]'
 job_company_name_css = 'span[data-automation="advertiser-name"]'
 job_location_css = 'span[data-automation="job-detail-location"]'
