@@ -23,7 +23,20 @@ def get_session() -> Session:
     return SessionLocal()
 
 
-
+def insert_all_job_ads(job_ads):
+    """
+    將所有的 JobAd 寫入資料庫
+    :param job_ads: List[JobAd]
+    """
+    session = get_session()
+    try:
+        session.add_all(job_ads)
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        print(f"Error inserting {len(job_ads)} job ads: {e}")
+    finally:
+        session.close()
 
 
 

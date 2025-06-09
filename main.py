@@ -10,6 +10,7 @@ from bs4 import BeautifulSoup
 from urllib.parse import urlparse, parse_qs
 from model import JobAd
 from db import get_session
+from db import insert_all_job_ads
 import time
 import csv
 import json
@@ -24,13 +25,16 @@ def setup_driver(headless=False):
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
     return driver
 
-# 假設你已經有 webdriver instance
-driver = setup_driver(headless=False)
+# ----------------------------------
+### container for outer conteainer 
+### div block _1oozmqe0 l218ib5b l218ibhf l218ib6v
 
-# 等待頁面載入
-driver.get("https://hk.jobsdb.com/android-jobs?page=1")
-driver.implicitly_wait(4)
-job_selector = 'div._1oozmqe0.l218ib4v.l218ib51 a[data-automation="job-list-item-link-overlay"]'
+
+### tried job selectors
+### div._1oozmqe0.l218ib4v.l218ib51 a[data-automation="job-list-item-link-overlay"]
+### a[data-automation="jobTitle"]
+
+job_selector = 'a[data-automation="jobTitle"]'
 job_title_selector = 'h1[data-automation="job-detail-title"]'
 job_company_name_selector = 'span[data-automation="advertiser-name"]'
 job_location_selector = 'span[data-automation="job-detail-location"]'
@@ -40,6 +44,26 @@ job_expected_salary_selector = 'span[data-automation="job-detail-add-expected-sa
 job_post_date_selector = 'span._1oozmqe0.l218ib4z._1ljn1h70._1ljn1h71._1ljn1h71u._1ljn1h76._1kdtdvw4'
 job_description_selector = 'div[data-automation="jobAdDetails"'
 
+next_page_button_selector = 'li._1oozmqe0.l218ibbb.l218ibb0.l218ibx a' # Next page button selector
+total_job_number_count_selector = 'span[data-automation="totalJobsCount"]'
+
+def have_next_page(driver):
+    try:
+        next_button = driver.find_element(By.CSS_SELECTOR, next_page_button_selector)
+        return next_button.get('aria-hidden') != 'true'
+    except Exception as e:
+        print(f"❌ Error checking for next page: {e}")
+        return False
+    
+def go_to_next_page(driver):
+    try:
+        next_button = driver.find_element(By.CSS_SELECTOR, next_page_button_selector)
+        next_button.click()
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, job_selector))
+        )
+    except Exception as e:
+        print(f"❌ Error going to next page: {e}")
 
 def get_job_salary(driver):
     try:
@@ -73,33 +97,46 @@ def extract_job(driver):
     except Exception as e:
         print(f"❌ Failed to extract job: {e}")
         return None
-# 找出所有目標元素（同一 class 的 list）
-elements = driver.find_elements(By.CSS_SELECTOR, job_selector)
-print(f"Found {len(elements)} elements.")
-noOfSuccess = 0
-job_ads = []
-session = get_session()
-for idx, element in enumerate(elements):
-    try:
-        # 使用 ActionChains 滾動並點擊元素
-        actions = ActionChains(driver)
-        actions.move_to_element(element).click().perform()
-        # 等待滾動或點擊後變化
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, job_title_selector))
-        )
-        job_ad = extract_job(driver)
-        job_ads.append(job_ad)
-    except Exception as e:
-        print(f"[{idx+1}] Click failed: {e}")
-        
-session.add_all(job_ads)  # 將所有 JobAd 實例添加到 session
-session.commit()  # 提交所有變更
-session.close()  # 關閉 session
-driver.quit()  # 關閉瀏覽器
-# ----------------------------------
+    
+def main():
+    # 設定瀏覽器驅動
+    driver = setup_driver(headless=False)
+
+    # 等待頁面載入
+    driver.get("https://hk.jobsdb.com/android-jobs?page=1")
+    driver.implicitly_wait(4)
+
+    # 找出所有目標元素（同一 class 的 list）
+    elements = driver.find_elements(By.CSS_SELECTOR, job_selector)
+    print(f"Found {len(elements)} elements.")
+    noOfSuccess = 0
+    job_ads = []
+    
+    for idx, element in enumerate(elements):
+        try:
+            # 使用 ActionChains 滾動並點擊元素
+            actions = ActionChains(driver)
+            actions.move_to_element(element).click().perform()
+            # 等待滾動或點擊後變化
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.CSS_SELECTOR, job_title_selector))
+            )
+            job_ad = extract_job(driver)
+            if job_ad != None:
+                job_ads.append(job_ad)
+                noOfSuccess += 1
+        except Exception as e:
+            print(f"[{idx+1}] Click failed: {e}")
+    session = get_session()        
+    session.add_all(job_ads)  # 將所有 JobAd 實例添加到 session
+    session.commit()  # 提交所有變更
+    session.close()  # 關閉 session
+    driver.quit()  # 關閉瀏覽器
+    print(f'noOfSuccess={noOfSuccess}')
+    # ----------------------------------
 
 
 ## main entry point
 if __name__ == "__main__":
-    print(f'noOfSuccess={noOfSuccess}')
+    main()
+    
