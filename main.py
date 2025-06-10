@@ -14,17 +14,35 @@ from db import insert_all_job_ads
 import time
 import csv
 import json
+import os
 
 
 def setup_driver(headless=False):
     options = Options()
     if headless:
         options.add_argument('--headless')
-    options.add_argument('--disable-gpu')
+    options.add_argument('--no-sandbox')
+    # Pretend Firefox User-Agent
+    firefox_user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:126.0) Gecko/20100101 Firefox/126.0"
+    options.add_argument(f'--user-agent={firefox_user_agent}')
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
     return driver
 
+def load_cookies(driver, filename="cookies.json"):
+    # 組合 temp 資料夾的完整路徑
+    temp_dir = os.path.join(os.getcwd(), "temp")
+    file_path = os.path.join(temp_dir, filename)
+    
+    # 檢查檔案是否存在
+    if not os.path.exists(file_path):
+        print(f"[✘] 找不到 cookie 檔案：{file_path}")
+        return
+    with open(file_path, "r") as f:
+        cookies = json.load(f)
+        for cookie in cookies:
+            driver.add_cookie(cookie)
+    driver.refresh()  # 刷新頁面以應用 cookies
 # ----------------------------------
 ### container for outer conteainer 
 ### div block _1oozmqe0 l218ib5b l218ibhf l218ib6v
@@ -41,16 +59,26 @@ job_location_selector = 'span[data-automation="job-detail-location"]'
 job_work_type_selector = 'span[data-automation="job-detail-work-type"]'
 job_detail_salary_selector = 'span[data-automation="job-detail-salary"]'
 job_expected_salary_selector = 'span[data-automation="job-detail-add-expected-salary"]'
+### _1oozmqe0 l218ib5b l218ibhf l218ib6z 
+### div._1oozmqe0.l218ib5b.l218ibhf.l218ib6z span._1oozmqe0.l218ib4z._1ljn1h70._1ljn1h71._1ljn1h71u._1ljn1h76._1kdtdvw4
+### div._1oozmqe0.l218ib5b.l218ibhf.l218ib73 div._1oozmqe0.l218ib5b.l218ibhf.l218ib6z span._1oozmqe0.l218ib4z._1ljn1h70._1ljn1h71._1ljn1h71u._1ljn1h76._1kdtdvw4
 job_post_date_selector = 'span._1oozmqe0.l218ib4z._1ljn1h70._1ljn1h71._1ljn1h71u._1ljn1h76._1kdtdvw4'
 job_description_selector = 'div[data-automation="jobAdDetails"'
 
 next_page_button_selector = 'li._1oozmqe0.l218ibbb.l218ibb0.l218ibx a' # Next page button selector
-total_job_number_count_selector = 'span[data-automation="totalJobsCount"]'
+total_job_number_count_selector = 'div[data-automation="totalJobsCountBcues"] span'
+total_job_number_count_selector_b = 'span[data-automation="totalJobsCount"]'
+
+## totalJobsCountBcues
 
 def have_next_page(driver):
     try:
         next_button = driver.find_element(By.CSS_SELECTOR, next_page_button_selector)
-        return next_button.get('aria-hidden') != 'true'
+        # Check if the button is visible and not hidden by 'aria-hidden'
+        is_visible = next_button.is_displayed()
+        aria_hidden = next_button.get_attribute('aria-hidden')  # Correct method
+        # Also consider checking if the button is enabled
+        return is_visible and aria_hidden != 'true' and next_button.is_enabled()
     except Exception as e:
         print(f"❌ Error checking for next page: {e}")
         return False
@@ -97,16 +125,15 @@ def extract_job(driver):
     except Exception as e:
         print(f"❌ Failed to extract job: {e}")
         return None
+def get_total_job_count(driver):
+    try:
+        total_count_element = driver.find_element(By.CSS_SELECTOR, total_job_number_count_selector)
+        return int(total_count_element.text.replace(',', ''))
+    except Exception as e:
+        print(f"❌ Error getting total job count: {e}")
+        return 0
     
-def main():
-    # 設定瀏覽器驅動
-    driver = setup_driver(headless=False)
-
-    # 等待頁面載入
-    driver.get("https://hk.jobsdb.com/android-jobs?page=1")
-    driver.implicitly_wait(4)
-
-    # 找出所有目標元素（同一 class 的 list）
+def loop_through_one_page(driver):
     elements = driver.find_elements(By.CSS_SELECTOR, job_selector)
     print(f"Found {len(elements)} elements.")
     noOfSuccess = 0
@@ -127,12 +154,47 @@ def main():
                 noOfSuccess += 1
         except Exception as e:
             print(f"[{idx+1}] Click failed: {e}")
-    session = get_session()        
-    session.add_all(job_ads)  # 將所有 JobAd 實例添加到 session
-    session.commit()  # 提交所有變更
-    session.close()  # 關閉 session
-    driver.quit()  # 關閉瀏覽器
-    print(f'noOfSuccess={noOfSuccess}')
+    insert_all_job_ads(job_ads)
+    return noOfSuccess
+    
+def main(load_cookies=False):
+    # 設定瀏覽器驅動
+    driver = setup_driver(headless=False)
+
+    # 等待頁面載入
+    driver.get("https://hk.jobsdb.com/android-jobs?page=1")
+    if(load_cookies):
+        load_cookies(driver)  # 載入 cookies
+    # WebDriverWait(driver, 10).until(
+    #     EC.presence_of_element_located((By.CSS_SELECTOR, total_job_number_count_selector))
+    # )
+    driver.implicitly_wait(5)  # 等待元素載入
+
+    # get total job count
+    #total_job_count = get_total_job_count(driver)
+    current_page_number = 1
+    total_number_of_jobs_extracted = 0
+    
+    ## extract first page
+    noOfSuccess = 0
+    noOfSuccess = loop_through_one_page(driver)
+
+    while have_next_page(driver):
+        go_to_next_page(driver)
+        current_page_number += 1
+        print(f"Processing page {current_page_number}...")
+        noOfSuccess = loop_through_one_page(driver)
+        print(f"Page {current_page_number} processed with {noOfSuccess} successful job ads.")
+        total_number_of_jobs_extracted += noOfSuccess
+
+
+
+
+
+    #print(f"Total job count: {total_job_count}")
+    print(f"Total number of jobs extracted: {total_number_of_jobs_extracted}")
+    driver.close()  # 關閉瀏覽器
+    
     # ----------------------------------
 
 
