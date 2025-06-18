@@ -1,6 +1,8 @@
 # for library
 selenium>=4.33.0
 webdriver-manager>=4.0.2
+pytest-playwright>=0.7.0
+playwright>=1.43.0
 beautifulsoup4>=4.13.4
 ## pandas>=2.2.3
 
