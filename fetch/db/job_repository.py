@@ -3,8 +3,8 @@
 from typing import Optional, List
 from sqlalchemy.orm import Session
 from datetime import datetime
-
-from scraper.db_models import Job, JobSnapshot
+from .sync_engine import engine
+from fetch.db import Job, JobSnapshot
 
 class JobRepository:
     def __init__(self, session: Session):
