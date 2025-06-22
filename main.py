@@ -6,13 +6,10 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from bs4 import BeautifulSoup
+from selector import PostSelector, ListSelector
 from urllib.parse import urlparse, parse_qs
-from model import JobAd
-from db import get_session
+from fetch.db.model import JobAd
 from db import insert_all_job_ads
-import time
-import csv
 import json
 import os
 
@@ -52,28 +49,10 @@ def load_cookies(driver, filename="cookies.json"):
 ### div._1oozmqe0.l218ib4v.l218ib51 a[data-automation="job-list-item-link-overlay"]
 ### a[data-automation="jobTitle"]
 
-job_selector = 'a[data-automation="jobTitle"]'
-job_title_selector = 'h1[data-automation="job-detail-title"]'
-job_company_name_selector = 'span[data-automation="advertiser-name"]'
-job_location_selector = 'span[data-automation="job-detail-location"]'
-job_work_type_selector = 'span[data-automation="job-detail-work-type"]'
-job_detail_salary_selector = 'span[data-automation="job-detail-salary"]'
-job_expected_salary_selector = 'span[data-automation="job-detail-add-expected-salary"]'
-### _1oozmqe0 l218ib5b l218ibhf l218ib6z 
-### div._1oozmqe0.l218ib5b.l218ibhf.l218ib6z span._1oozmqe0.l218ib4z._1ljn1h70._1ljn1h71._1ljn1h71u._1ljn1h76._1kdtdvw4
-### div._1oozmqe0.l218ib5b.l218ibhf.l218ib73 div._1oozmqe0.l218ib5b.l218ibhf.l218ib6z span._1oozmqe0.l218ib4z._1ljn1h70._1ljn1h71._1ljn1h71u._1ljn1h76._1kdtdvw4
-job_post_date_selector = 'span._1oozmqe0.l218ib4z._1ljn1h70._1ljn1h71._1ljn1h71u._1ljn1h76._1kdtdvw4'
-job_description_selector = 'div[data-automation="jobAdDetails"'
-
-next_page_button_selector = 'li._1oozmqe0.l218ibbb.l218ibb0.l218ibx a' # Next page button selector
-total_job_number_count_selector = 'div[data-automation="totalJobsCountBcues"] span'
-total_job_number_count_selector_b = 'span[data-automation="totalJobsCount"]'
-
-## totalJobsCountBcues
 
 def have_next_page(driver):
     try:
-        next_button = driver.find_element(By.CSS_SELECTOR, next_page_button_selector)
+        next_button = driver.find_element(By.CSS_SELECTOR, ListSelector.NEXT_PAGE_BTN)
         # Check if the button is visible and not hidden by 'aria-hidden'
         is_visible = next_button.is_displayed()
         aria_hidden = next_button.get_attribute('aria-hidden')  # Correct method
@@ -85,30 +64,30 @@ def have_next_page(driver):
     
 def go_to_next_page(driver):
     try:
-        next_button = driver.find_element(By.CSS_SELECTOR, next_page_button_selector)
+        next_button = driver.find_element(By.CSS_SELECTOR, ListSelector.NEXT_PAGE_BTN)
         next_button.click()
         WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, job_selector))
+            EC.presence_of_element_located((By.CSS_SELECTOR, ListSelector.JOB))
         )
     except Exception as e:
         print(f"❌ Error going to next page: {e}")
 
 def get_job_salary(driver):
     try:
-        job_detail_salary = driver.find_element(By.CSS_SELECTOR,job_detail_salary_selector)
+        job_detail_salary = driver.find_element(By.CSS_SELECTOR,PostSelector.DETAIL_SALARY)
         return job_detail_salary.text
     except Exception as e:
-        job_expected_salary = driver.find_element(By.CSS_SELECTOR,job_expected_salary_selector)
+        job_expected_salary = driver.find_element(By.CSS_SELECTOR,PostSelector.EXPECTED_SALARY)
         return job_expected_salary.text
 def extract_job(driver):
     try:
-        job_title = driver.find_element(By.CSS_SELECTOR, job_title_selector).text
-        company_name = driver.find_element(By.CSS_SELECTOR, job_company_name_selector).text
-        job_loc = driver.find_element(By.CSS_SELECTOR, job_location_selector).text
-        job_type = driver.find_element(By.CSS_SELECTOR, job_work_type_selector).text
-        job_post_date = driver.find_element(By.CSS_SELECTOR, job_post_date_selector).text
+        job_title = driver.find_element(By.CSS_SELECTOR, PostSelector.TITLE).text
+        company_name = driver.find_element(By.CSS_SELECTOR, PostSelector.COMPANY_NAME).text
+        job_loc = driver.find_element(By.CSS_SELECTOR, PostSelector.LOCATION).text
+        job_type = driver.find_element(By.CSS_SELECTOR, PostSelector.WORK_TYPE).text
+        job_post_date = ''#driver.find_element(By.CSS_SELECTOR, PostSelector.POST_DATE).text
         job_salary_text = get_job_salary(driver)
-        job_des = driver.find_element(By.CSS_SELECTOR, job_description_selector).text
+        job_des = driver.find_element(By.CSS_SELECTOR, PostSelector.DESCRIPTION).text
         url = driver.current_url
         job_id = int(parse_qs(urlparse(url).query).get("jobId", [-1])[0])
 
@@ -127,14 +106,14 @@ def extract_job(driver):
         return None
 def get_total_job_count(driver):
     try:
-        total_count_element = driver.find_element(By.CSS_SELECTOR, total_job_number_count_selector)
+        total_count_element = driver.find_element(By.CSS_SELECTOR, ListSelector.JOB_NUMBER_COUNT_A)
         return int(total_count_element.text.replace(',', ''))
     except Exception as e:
         print(f"❌ Error getting total job count: {e}")
         return 0
     
 def loop_through_one_page(driver):
-    elements = driver.find_elements(By.CSS_SELECTOR, job_selector)
+    elements = driver.find_elements(By.CSS_SELECTOR, ListSelector.JOB)
     print(f"Found {len(elements)} elements.")
     noOfSuccess = 0
     job_ads = []
@@ -146,7 +125,7 @@ def loop_through_one_page(driver):
             actions.move_to_element(element).click().perform()
             # 等待滾動或點擊後變化
             WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.CSS_SELECTOR, job_title_selector))
+                EC.presence_of_element_located((By.CSS_SELECTOR, PostSelector.TITLE))
             )
             job_ad = extract_job(driver)
             if job_ad != None:

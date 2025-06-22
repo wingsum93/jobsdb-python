@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
-from model import Base  # ✅ 這邊 import model.py 裡面的 Base
+from fetch.db.model import Base  # ✅ 這邊 import model.py 裡面的 Base
 from dotenv import load_dotenv
 import os
 

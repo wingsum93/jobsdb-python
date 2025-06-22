@@ -1,7 +1,5 @@
 from db import get_session
-from model import JobAd
-from sqlalchemy.orm import Session
-
+from fetch.db.model import JobAd
 
 s = get_session()
 

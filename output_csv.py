@@ -1,6 +1,6 @@
 
 import csv
-from model import JobAd
+from fetch.db.model import JobAd
 from db import get_session  # 你 db.py 裡面的 session 建立方法
 
 def export_job_ads_to_csv(filename: str = "job_ads.csv"):
