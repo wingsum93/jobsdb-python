@@ -1,24 +1,38 @@
-from sqlalchemy import create_engine, Integer, String
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, Session
-
+from sqlalchemy import Column, String, Integer, Text, TIMESTAMP, ForeignKey, ARRAY
+from sqlalchemy.orm import declarative_base, relationship
+from sqlalchemy.sql import func
 
 
 # 1. Define base model
 class Base(DeclarativeBase):
     pass
 
-# 2. Define your table as a Python class
-class JobAd(Base):
-    __tablename__ = "job_ads"
+class Job(Base):
+    __tablename__ = "jobs"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    jobadid: Mapped[int] = mapped_column(Integer)
-    job_title: Mapped[str] = mapped_column(String)
-    company_name: Mapped[str] = mapped_column(String)
-    job_loc: Mapped[str] = mapped_column(String)
-    job_type: Mapped[str] = mapped_column(String)
-    job_post_date: Mapped[str] = mapped_column(String)
-    job_salary_text: Mapped[str] = mapped_column(String)
-    job_description: Mapped[str] = mapped_column(String)
+    job_id = Column(String, primary_key=True)  # e.g. extracted from URL or job element
+    title = Column(String, nullable=False)
+    company = Column(String)
+    location = Column(String)
+    detail_url = Column(String)
+    description = Column(Text)
+    requirements = Column(Text)
+    created_at = Column(TIMESTAMP, server_default=func.now())
+    last_seen_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
 
+    snapshots = relationship("JobSnapshot", back_populates="job", cascade="all, delete-orphan")
 
+class JobSnapshot(Base):
+    __tablename__ = "job_snapshots"
+
+    id = Column(Integer, primary_key=True)
+    job_id = Column(String, ForeignKey("jobs.job_id", ondelete="CASCADE"), nullable=False)
+    snapshot_time = Column(TIMESTAMP, server_default=func.now())
+    salary = Column(String)
+    work_type = Column(String)
+    employment_type = Column(String)
+    tags = Column(ARRAY(String))
+    source_url = Column(String)
+    raw_html = Column(Text)
+
+    job = relationship("Job", back_populates="snapshots")
