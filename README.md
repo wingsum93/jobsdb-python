@@ -12,3 +12,6 @@ python -m tools.db_init
 ```shell
 python -m main
 ```
+
+## Bugs
+the select next page logic need fix (2 scenario)

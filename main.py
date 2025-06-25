@@ -135,7 +135,7 @@ class JobsDBScraper:
                         }
                     )
                     no_of_success += 1
-                time.sleep(random.uniform(1, 2))
+                time.sleep(random.uniform(0.1, 0.5))
             except Exception as e:
                 print(f"[{idx + 1}] Click failed: {e}")
 
