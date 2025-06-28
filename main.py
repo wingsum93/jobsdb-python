@@ -7,7 +7,8 @@ import time
 import random
 from dataclasses import dataclass
 from fetch.db.job_repository import JobRepository
-from fetch import SessionLocal
+from fetch import SessionLocal, Config
+
 
 @dataclass
 class ScrapedJobData:
@@ -152,7 +153,7 @@ class JobsDBScraper:
             if load_cookie:
                 self.load_cookies(page)
 
-            page.wait_for_timeout(5000)
+            page.wait_for_timeout(Config.GENERAL_TIMEOUT)
             current_page_number = 1
 
             no_of_success = self.loop_through_one_page(page)

@@ -3,7 +3,6 @@
 from typing import Optional, List
 from sqlalchemy.orm import Session
 from datetime import datetime
-from .sync_engine import engine
 from fetch.db import Job, JobSnapshot
 
 class JobRepository:
